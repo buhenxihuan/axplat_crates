@@ -5,11 +5,10 @@ description = "Implementation of `axplat` hardware abstraction layer for Rockchi
 documentation = "https://docs.rs/axplat-aarch64-rk3588j" # not published
 keywords = ["arceos", "os", "hal", "embedded", "aarch64"]
 categories = ["embedded", "no-std", "hardware-support", "os"]
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-homepage.workspace = true
-repository.workspace = true
+edition = "2024"
+authors= ["xiaohui"]
+license = "GPL-2.0"
+repository = "https://github.com/buhenxihuan/axplat_crates"
 
 [features]
 fp-simd = ["axcpu/fp-simd"]
@@ -28,9 +27,9 @@ rdrive = "0.15"
 lazyinit = "0.2"
 
 axconfig-macros = "0.2"
-axplat-aarch64-peripherals = { version = "0.1", path = "../axplat-aarch64-peripherals" }
-axcpu = { workspace = true }
-axplat = { workspace = true }
+axplat-aarch64-peripherals = "0.1"
+axcpu = "0.2"
+axplat = "0.1"
 
 [package.metadata.docs.rs]
 targets = ["aarch64-unknown-none"]
