@@ -17,7 +17,7 @@ impl InitIf for InitIfImpl {
         axcpu::init::init_trap();
         axplat_aarch64_peripherals::psci::init(PSCI_METHOD);
         super::dw_apb_uart::init_early();
-        axplat_aarch64_peripherals::generic_timer::init_early();
+        crate::generic_timer::init_early();
     }
 
     /// Initializes the platform at the early stage for secondary cores.
@@ -35,8 +35,7 @@ impl InitIf for InitIfImpl {
         #[cfg(feature = "irq")]
         {
             crate::irq::init();
-            crate::irq::init_current_cpu();
-            axplat_aarch64_peripherals::generic_timer::enable_irqs(TIMER_IRQ);
+            crate::generic_timer::enable_irqs(TIMER_IRQ);
         }
     }
 
@@ -46,7 +45,7 @@ impl InitIf for InitIfImpl {
         #[cfg(feature = "irq")]
         {
             crate::irq::init_current_cpu();
-            axplat_aarch64_peripherals::generic_timer::enable_irqs(TIMER_IRQ);
+            crate::generic_timer::enable_irqs(TIMER_IRQ);
         }
     }
 }

@@ -25,9 +25,14 @@ aarch64-cpu = "10"
 aarch64-cpu-ext = "0.1"
 rdrive = "0.15"
 lazyinit = "0.2"
+memory_addr = "0.4"
+arm-gic-driver = "0.14"
+int_ratio = "0.1"
+arm_pl031 = "0.2"
 
 axconfig-macros = "0.2"
-axplat-aarch64-peripherals = "0.1"
+# axplat-aarch64-peripherals = "0.1"
+axplat-aarch64-peripherals = { path = "../axplat_crates/platforms/axplat-aarch64-peripherals" }
 axcpu = "0.2"
 axplat = "0.1"
 

@@ -1,10 +1,21 @@
 use aarch64_cpu::registers::*;
 use alloc::{format, string::String};
+use kspin::SpinNoIrq;
+use alloc::boxed::Box;
+use core::ptr::NonNull;
+use arm_gic_driver::*;
+use crate::config::devices::{GICD_PADDR, GICR_PADDR};
+use crate::mem::phys_to_virt;
+use memory_addr::PhysAddr;
+use memory_addr::pa;
+
+const GICD_BASE: PhysAddr = pa!(GICD_PADDR);
+const GICR_BASE: PhysAddr = pa!(GICR_PADDR);
 
 use axplat::irq::{HandlerTable, IrqHandler, IrqIf};
-use lazyinit::LazyInit;
+// use lazyinit::LazyInit;
 use log::{debug, trace, warn};
-use rdrive::{Device, driver::intc::*};
+
 
 const SPI_START: usize = 32;
 /// The maximum number of IRQs.
@@ -15,8 +26,11 @@ fn is_irq_private(irq_num: usize) -> bool {
 }
 
 // per-CPU, no lock
-static CPU_IF: LazyInit<local::Boxed> = LazyInit::new();
+// static CPU_IF: LazyInit<local::Boxed> = LazyInit::new();
 static IRQ_HANDLER_TABLE: HandlerTable<MAX_IRQ_COUNT> = HandlerTable::new();
+
+static GICD: SpinNoIrq<Option<arm_gic_driver::v3::Gic>> = SpinNoIrq::new(None);
+static GICR: SpinNoIrq<Option<Box<dyn arm_gic_driver::local::Interface>>> = SpinNoIrq::new(None);
 
 struct IrqIfImpl;
 
@@ -24,7 +38,7 @@ struct IrqIfImpl;
 impl IrqIf for IrqIfImpl {
     /// Enables or disables the given IRQ.
     fn set_enable(irq_raw: usize, enabled: bool) {
-        set_enable(irq_raw, None, enabled);
+        set_enable(irq_raw, enabled);
     }
 
     /// Registers an IRQ handler for the given IRQ.
@@ -57,85 +71,78 @@ impl IrqIf for IrqIfImpl {
     /// IRQ handler table and calls the corresponding handler. If necessary, it
     /// also acknowledges the interrupt controller after handling.
     fn handle(_unused: usize) {
-        let Some(irq) = CPU_IF.ack() else {
+        let Some(irq) =  GICR.lock().as_mut().unwrap().ack() else {
             return;
         };
         let irq_num: usize = irq.into();
-        trace!("IRQ {}", irq_num);
+        // trace!("IRQ {}", irq_num);
         if !IRQ_HANDLER_TABLE.handle(irq_num as _) {
             warn!("Unhandled IRQ {irq_num}");
         }
 
-        CPU_IF.eoi(irq);
-        if CPU_IF.get_eoi_mode() {
-            CPU_IF.dir(irq);
+        GICR.lock().as_mut().unwrap().eoi(irq);
+        if GICR.lock().as_mut().unwrap().get_eoi_mode() {
+            GICR.lock().as_mut().unwrap().dir(irq);
         }
     }
 }
 
 pub(crate) fn init() {
-    let intc = get_gicd();
-    debug!("Initializing GICD...");
-    intc.lock().unwrap().open().unwrap();
-    debug!("GICD initialized");
+ let mut gicd = arm_gic_driver::v3::Gic::new(
+        NonNull::new(phys_to_virt(GICD_BASE).as_mut_ptr()).unwrap(),
+        NonNull::new(phys_to_virt(GICR_BASE).as_mut_ptr()).unwrap(),
+    );
+
+     debug!("Initializing GICD at {:#x}", GICD_BASE);
+    gicd.open().unwrap();
+
+    info!(
+        "Initializing GICR for BSP. Global GICR base at {:#x}",
+        GICR_BASE
+    );
+    let mut interface = gicd.cpu_local().unwrap();
+    interface.open().unwrap();
+
+    GICD.lock().replace(gicd);
+    GICR.lock().replace(interface);
+    info!("GIC initialized {}",current_cpu());
 }
 
 pub(crate) fn init_current_cpu() {
-    let intc = rdrive::get_one::<Intc>().expect("no interrupt controller found");
-    let mut cpu_if = intc.lock().unwrap().cpu_local().unwrap();
-    cpu_if.open().unwrap();
-    cpu_if.set_eoi_mode(true);
-    CPU_IF.call_once(move || cpu_if);
-    debug!("GIC initialized for current CPU");
+    debug!("Initializing GICR for current CPU {}",current_cpu());
+    let mut interface = GICD.lock().as_mut().unwrap().cpu_local().unwrap();
+    interface.open().unwrap();
+    GICR.lock().replace(interface);
+    debug!(  "Initialized GICR for current CPU {}",current_cpu());
 }
 
-fn get_gicd() -> Device<Intc> {
-    rdrive::get_one().expect("no interrupt controller found")
-}
+
 
 fn current_cpu() -> usize {
     MPIDR_EL1.get() as usize & 0xffffff
 }
 
-pub(crate) fn set_enable(irq_raw: usize, trigger: Option<Trigger>, enabled: bool) {
-    debug!(
-        "IRQ({:#x}) set enable: {}, {}",
-        irq_raw,
-        enabled,
-        match trigger {
-            Some(t) => format!("trigger: {t:?}"),
-            None => String::new(),
-        }
-    );
-    let irq: IrqId = irq_raw.into();
-    if is_irq_private(irq_raw)
-        && let local::Capability::ConfigLocalIrq(c) = CPU_IF.capability()
-    {
+pub(crate) fn set_enable(irq_num: usize, enabled: bool) {
+    use arm_gic_driver::local::cap::ConfigLocalIrq;
+
+    let mut gicd = GICD.lock();
+    let d = gicd.as_mut().unwrap();
+
+    if irq_num < 32 {
+        trace!("GICR set enable: {} {}", irq_num, enabled);
+
         if enabled {
-            c.irq_enable(irq).expect("failed to enable local IRQ");
+            d.get_gicr().irq_enable(irq_num.into()).unwrap();
         } else {
-            c.irq_disable(irq).expect("failed to disable local IRQ");
-        }
-        if let Some(t) = trigger {
-            c.set_trigger(irq, t)
-                .expect("failed to set local IRQ trigger");
+            d.get_gicr().irq_disable(irq_num.into()).unwrap();
         }
     } else {
-        let mut intc = get_gicd().lock().unwrap();
-        if enabled {
-            intc.irq_enable(irq).expect("failed to enable IRQ");
-            if !is_irq_private(irq_raw) {
-                // For private IRQs, we need to acknowledge the interrupt
-                // controller.
-                intc.set_target_cpu(irq, current_cpu().into()).unwrap();
-            }
+        trace!("GICD set enable: {} {}", irq_num, enabled);
 
-            if let Some(t) = trigger {
-                intc.set_trigger(irq, t).expect("failed to set IRQ trigger");
-            }
+        if enabled {
+            d.irq_enable(irq_num.into()).unwrap();
         } else {
-            intc.irq_disable(irq).expect("failed to disable IRQ");
+            d.irq_disable(irq_num.into()).unwrap();
         }
     }
-    debug!("IRQ({irq_raw:#x}) set enable done");
 }

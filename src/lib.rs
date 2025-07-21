@@ -25,13 +25,14 @@ mod boot;
 mod dw_apb_uart;
 mod init;
 mod mem;
+mod generic_timer;
 #[cfg(feature = "irq")]
 mod irq;
 #[cfg(feature = "smp")]
 mod mp;
 mod power;
 
-axplat_aarch64_peripherals::time_if_impl!(TimeIfImpl);
+// crate::time_if_impl!(TimeIfImpl);
 
 // #[cfg(feature = "irq")]
 // axplat_aarch64_peripherals::irq_if_impl!(IrqIfImpl);
