@@ -1,11 +1,11 @@
-# axplat-aarch64-bsta1000b
+# axplat-aarch64-rk3588j
 
-Implementation of [axplat](https://github.com/arceos-org/axplat_crates/tree/main/axplat) hardware abstraction layer for Black Sesame Technology A1000b SoC.
+Implementation of [axplat](https://github.com/arceos-org/axplat_crates/tree/main/axplat) hardware abstraction layer for Rockchip RK3588J SoC.
 
 ## Install
 
 ```bash
-cargo +nightly add axplat axplat-aarch64-bsta1000b
+cargo +nightly add axplat axplat-aarch64-rk3588j
 ```
 
 ## Usage
@@ -32,7 +32,7 @@ fn kernel_main(cpu_id: usize, arg: usize) -> ! {
 
 ```rust
 // Can be located at any dependency crate.
-extern crate axplat_aarch64_bsta1000b;
+extern crate axplat_aarch64_rk3588j;
 ```
 
 #### 3. Use a linker script like the following

@@ -15,7 +15,7 @@ impl InitIf for InitIfImpl {
     /// early console, clocking).
     fn init_early(_cpu_id: usize, _dtb: usize) {
         axcpu::init::init_trap();
-        axplat_aarch64_peripherals::psci::init(PSCI_METHOD);
+        crate::psci::init(PSCI_METHOD);
         super::dw_apb_uart::init_early();
         crate::generic_timer::init_early();
     }

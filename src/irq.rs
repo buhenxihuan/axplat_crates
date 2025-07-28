@@ -13,7 +13,6 @@ const GICD_BASE: PhysAddr = pa!(GICD_PADDR);
 const GICR_BASE: PhysAddr = pa!(GICR_PADDR);
 
 use axplat::irq::{HandlerTable, IrqHandler, IrqIf};
-// use lazyinit::LazyInit;
 use log::{debug, trace, warn};
 
 
@@ -25,8 +24,6 @@ fn is_irq_private(irq_num: usize) -> bool {
     irq_num < SPI_START
 }
 
-// per-CPU, no lock
-// static CPU_IF: LazyInit<local::Boxed> = LazyInit::new();
 static IRQ_HANDLER_TABLE: HandlerTable<MAX_IRQ_COUNT> = HandlerTable::new();
 
 static GICD: SpinNoIrq<Option<arm_gic_driver::v3::Gic>> = SpinNoIrq::new(None);
